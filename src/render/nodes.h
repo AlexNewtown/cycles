@@ -103,7 +103,16 @@ class ImageTextureNode : public ImageSlotTextureNode {
   }
 
   /* Parameters. */
-  bool alternate_tiles;
+
+  /* Rhino mirror alternate tiles in across UV space boundaries. */
+  bool alternate_tiles; 
+  /* Sweep used in spherical and tubular projections t. */
+  float horizontal_sweep_start, horizontal_sweep_end, vertical_sweep_start, vertical_sweep_end;
+  /* Height used in tubular, radius in spherical and tubular projections. */
+  float height, radius;
+  /* Projection used by decal: both, forward or backward */
+  NodeImageDecalProjection decal_projection;
+  NodeImageDecalMapSide decal_map_side;
   ustring filename;
   void *builtin_data;
   ustring colorspace;
@@ -115,6 +124,9 @@ class ImageTextureNode : public ImageSlotTextureNode {
   bool animated;
   float3 vector;
   ccl::vector<int> tiles;
+
+  float decalforward;
+  float decalinside;
 
   /* Runtime. */
   bool is_float;

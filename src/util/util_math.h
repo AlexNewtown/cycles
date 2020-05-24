@@ -753,6 +753,83 @@ ccl_device_inline float2 map_to_tube(const float3 co)
   return make_float2(u, v);
 }
 
+ccl_device_inline float principal_value_angle_rad(float angleRad)
+{
+  if (angleRad >= M_2PI_F)
+  {
+    angleRad = angleRad - floorf(angleRad / M_2PI_F) * M_2PI_F;
+  }
+  else if (angleRad <= 0.0f)
+  {
+    angleRad = angleRad + ceilf(-angleRad / M_2PI_F) * M_2PI_F;
+  }
+  if (angleRad < 1e-12f)
+    angleRad = 0.0;
+  if (angleRad > M_2PI_F)
+    angleRad = M_2PI_F;
+  return angleRad;
+}
+
+// sweeps.x/y = horizontal start/end
+ccl_device_inline float3 map_to_cylinder_section(const float3 co, const float4 sweeps, const float height)
+{
+  float len, u, v, hit, t;
+  hit = t = 0.0f;
+  len = sqrtf(co.x * co.x + co.y * co.y);
+  if (len > 0.0f) {
+    t = ((co.x!=0.0f || co.y!=0.0f) ? atan2f(co.y, co.x) : 0.0f);
+    u = 0.5 * M_1_PI_F * t;
+    if (u < 0.0f) {
+      u += 1.0f;
+    }
+
+    u = clamp(u, 0.0f, 1.0f);
+    v = 0.5f * (1.0f / height) * co.z + 0.5f;
+
+    float pt_longitude = u * M_2PI_F;
+
+    float sta_longitude = sweeps.x, end_longitude = sweeps.y;
+
+    // Longitudes relative to decal start longitudeitude
+    float rel_decal_sta_longitude = 0.0;
+    float rel_decal_end_longitude = principal_value_angle_rad(end_longitude - sta_longitude);
+    float rel_pt_longitude = principal_value_angle_rad(pt_longitude - sta_longitude);
+
+    // If end and start longitudeitudes have same value then decal is supposed to go around the cylinder
+    if (rel_decal_end_longitude == 0.0)
+      rel_decal_end_longitude = M_2PI_F;
+
+    if (rel_decal_sta_longitude <= rel_pt_longitude && rel_decal_end_longitude >= rel_pt_longitude)
+    {
+      // Scale longitudeitude to texture u-coordinate
+      u = rel_pt_longitude / rel_decal_end_longitude;
+      if (u >= 0.0 && u <= 1.0 && v >= 0.0 && v <= 1.0) {
+        hit = 1.0f;
+      }
+      else {
+        u = v = hit = 0.0f;
+      }
+    }
+    else {
+      u = v = hit = 0.0f;
+    }
+  }
+  else {
+    u = v = hit = 0.0f;
+  }
+  /*
+  if(hit>0.0f) {
+    u = 0.0f;
+    v = 1.0f;
+    hit = 0.0f;
+  } else {
+    u = 1.0f;
+    v = 0.0f;
+    hit = 0.0f;
+  }*/
+  return make_float3(u, v, hit);
+}
+
 ccl_device_inline float2 map_to_sphere(const float3 co)
 {
   float l = len(co);
@@ -770,6 +847,70 @@ ccl_device_inline float2 map_to_sphere(const float3 co)
     u = v = 0.0f;
   }
   return make_float2(u, v);
+}
+
+ccl_device_inline float3 map_to_sphere_section(const float3 co, const float4 sweeps)
+{
+  float len, u, v, longitude, latitude, hit;
+
+  len = u = v = longitude = latitude = hit = 0.0f;
+
+  len = sqrtf(co.x * co.x + co.y * co.y);
+  if (len > 0.0f) {
+    u = co.x;
+    v = co.y;
+
+    longitude = (v != 0.0f || u != 0.0f) ? atan2f(v, u) : 0.0f;
+    latitude = (co.z != 0.0f) ? atan2f(co.z, len) : 0.0f;
+
+    if (latitude > M_PI_F) {
+      latitude -= M_2PI_F;
+    }
+
+    u = 0.5f * M_1_PI_F * longitude;
+    if (u < 0.0f) {
+      u += 1.0f;
+    }
+    else if (u > 1.0f) {
+      u = 1.0f;
+    }
+
+    v = clamp(M_1_PI_F * latitude + 0.5f, 0.0f, 1.0f);
+
+    // Map u coordinate to longitude
+    float point_longitude = u * M_2PI_F;
+
+    float long_start = sweeps.x;
+    float long_end = sweeps.y;
+    float lat_start = sweeps.z;
+    float lat_end = sweeps.w;
+
+    // Longitudes relative to decal start longitude
+    float rel_decal_end_longitude = principal_value_angle_rad(long_end - long_start);
+    float rel_point_longitude = principal_value_angle_rad(point_longitude - long_start);
+
+    // If end and start longitudes have same value then decal is supposed to go full circle around
+    // the vertical axis
+    if (rel_decal_end_longitude == 0.0f)
+      rel_decal_end_longitude = M_2PI_F;
+
+    float v_start = M_1_PI_F * lat_start + 0.5f;
+    float v_end = M_1_PI_F * lat_end + 0.5f;
+
+    if (rel_decal_end_longitude >= rel_point_longitude && v_start <= v && v_end >= v) {
+      u = rel_point_longitude / rel_decal_end_longitude;
+      v = (v - v_start) / (v_end - v_start);
+      hit = 1.0f;
+    }
+    else {
+      u = v = hit = 0.0f;
+    }
+  }
+  else {
+    u = v = hit = 0.0f;
+  }
+
+  return make_float3(u, v, hit);
 }
 
 /* Compares two floats.

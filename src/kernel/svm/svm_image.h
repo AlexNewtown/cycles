@@ -66,22 +66,44 @@ ccl_device void svm_node_tex_image(
     KernelGlobals *kg, ShaderData *sd, float *stack, uint4 node, int *offset)
 {
   uint co_offset, out_offset, alpha_offset, flags;
+  uint alternate_tiles, decal_direction, decalforward_in_offset, decalinside_in_offset;
+  uint decal_map_side, tmp2, tmp3, tmp4;
+  float decalforward;
+  float inside;
+  float radius, height;
+  float hit = 1.0;
+
   uint4 node2 = read_node(kg, offset);
+  float4 sweeps = read_node_float(kg, offset);
 
   svm_unpack_node_uchar4(node.z, &co_offset, &out_offset, &alpha_offset, &flags);
 
+  svm_unpack_node_uchar4(node2.x, &alternate_tiles, &decal_direction, &decalforward_in_offset, &decalinside_in_offset);
+  svm_unpack_node_uchar4(node2.y, &decal_map_side, &tmp2 ,&tmp3, &tmp4);
+
+  radius = __int_as_float(node2.z);
+  height = __int_as_float(node2.w) * 0.5f;
+
   float3 co = stack_load_float3(stack, co_offset);
+  decalforward = stack_load_float_default(stack, decalforward_in_offset, 1.0f);
+  inside = stack_load_float_default(stack, decalinside_in_offset, 0.0f);
   float2 tex_co;
+  float3 cyl_tex_co;
   if (node.w == NODE_IMAGE_PROJ_SPHERE) {
-    co = texco_remap_square(co);
-    tex_co = map_to_sphere(co);
+    //co = texco_remap_square(co);
+    cyl_tex_co = map_to_sphere_section(co, sweeps);
+    tex_co = make_float2(cyl_tex_co.x, cyl_tex_co.y);
+    hit = cyl_tex_co.z;
   }
   else if (node.w == NODE_IMAGE_PROJ_TUBE) {
-    co = texco_remap_square(co);
-    tex_co = map_to_tube(co);
+    //co = texco_remap_square(co);
+    //tex_co = map_to_tube(co);
+    cyl_tex_co = map_to_cylinder_section(co, sweeps, height);
+    tex_co = make_float2(cyl_tex_co.x, cyl_tex_co.y);
+    hit = cyl_tex_co.z;
   }
   else {
-    if (node2.x != 0) {
+    if (alternate_tiles != 0) {
       co.x = alternate_tile(co.x);
       co.y = alternate_tile(co.y);
     }
@@ -131,7 +153,26 @@ ccl_device void svm_node_tex_image(
     id = -num_nodes;
   }
 
-  float4 f = svm_image_texture(kg, id, tex_co.x, tex_co.y, flags);
+  float4 f;
+  f = svm_image_texture(kg, id, tex_co.x, tex_co.y, flags);
+
+  if (node.w == NODE_IMAGE_PROJ_SPHERE || node.w == NODE_IMAGE_PROJ_TUBE) {
+    if (hit < 0.0f) {
+      f.w = 0.0f;
+    }
+  }
+  else {
+    if (decal_direction == 1) {
+      if (decalforward < 0.0f) {
+        f.w = 0.0f;
+      }
+    }
+    else if (decal_direction == 2) {
+      if (decalforward > 0.0f) {
+        f.w = 0.0f;
+      }
+    }
+  }
 
   if (stack_valid(out_offset))
     stack_store_float3(stack, out_offset, make_float3(f.x, f.y, f.z));

@@ -137,23 +137,39 @@ ccl_device void svm_node_tex_coord(
 
   switch (type) {
     case NODE_TEXCO_OBJECT: {
+      uint use_transform, decal_forward_offset, decal_inside_offset;
+      svm_unpack_node_uchar3(node.w, &use_transform, &decal_forward_offset, &decal_inside_offset);
       data = sd->P;
       if (sd->object != OBJECT_NONE && kernel_tex_fetch(__objects, sd->object).use_ocs_frame>0)  {
         Transform tfm = kernel_tex_fetch(__objects, sd->object).ocs_frame;
         data = transform_point(&tfm, data);
       }
-      if (node.w == 0) {
+      if (use_transform == 0) {
         if (sd->object != OBJECT_NONE) {
           object_inverse_position_transform(kg, sd, &data);
         }
       }
       else {
-        Transform tfm;
+        Transform tfm, itfm;
+        float3 n = sd->N;
+        float3 orig = make_float3(0.0f, 0.0f, 0.0f);
+        float3 upz = make_float3(0.0f, 0.0f, 1.0f);
         tfm.x = read_node_float(kg, offset);
         tfm.y = read_node_float(kg, offset);
         tfm.z = read_node_float(kg, offset);
+        itfm.x = read_node_float(kg, offset);
+        itfm.y = read_node_float(kg, offset);
+        itfm.z = read_node_float(kg, offset);
+
+        orig = transform_point(&tfm, orig);
+        upz = transform_direction(&itfm, upz);
+        float dotp = dot(upz, n);
+        float inside = dot(n, data - orig);
+
+        stack_store_float(stack, decal_forward_offset, dotp > 0.0f ? 1.0f : -1.0f);
+        stack_store_float(stack, decal_inside_offset, inside < 0.0f ? 1.0f : 0.0f);
+
         data = transform_point(&tfm, data);
-        //data = transform_direction(&tfm, data);
       }
       break;
     }
@@ -278,23 +294,39 @@ ccl_device void svm_node_tex_coord_bump_dx(
 
   switch (type) {
     case NODE_TEXCO_OBJECT: {
+      uint use_transform, decal_forward_offset, decal_inside_offset;
+      svm_unpack_node_uchar3(node.w, &use_transform, &decal_forward_offset, &decal_inside_offset);
       data = sd->P + sd->dP.dx;
       if (sd->object != OBJECT_NONE && kernel_tex_fetch(__objects, sd->object).use_ocs_frame>0)  {
         Transform tfm = kernel_tex_fetch(__objects, sd->object).ocs_frame;
         data = transform_point(&tfm, data);
       }
-      if (node.w == 0) {
+      if (use_transform == 0) {
         if (sd->object != OBJECT_NONE) {
           object_inverse_position_transform(kg, sd, &data);
         }
       }
       else {
-        Transform tfm;
+        Transform tfm, itfm;
+        float3 n = sd->N;
+        float3 orig = make_float3(0.0f, 0.0f, 0.0f);
+        float3 upz = make_float3(0.0f, 0.0f, 1.0f);
         tfm.x = read_node_float(kg, offset);
         tfm.y = read_node_float(kg, offset);
         tfm.z = read_node_float(kg, offset);
+        itfm.x = read_node_float(kg, offset);
+        itfm.y = read_node_float(kg, offset);
+        itfm.z = read_node_float(kg, offset);
+
+        orig = transform_point(&tfm, orig);
+        upz = transform_direction(&itfm, upz);
+        float dotp = dot(upz, n);
+        float inside = dot(n, data - orig);
+
+        stack_store_float(stack, decal_forward_offset, dotp > 0.0f ? 1.0f : -1.0f);
+        stack_store_float(stack, decal_inside_offset, inside < 0.0f ? 1.0f : 0.0f);
+
         data = transform_point(&tfm, data);
-        //data = transform_direction(&tfm, data);
       }
       break;
     }
@@ -380,23 +412,39 @@ ccl_device void svm_node_tex_coord_bump_dy(
 
   switch (type) {
     case NODE_TEXCO_OBJECT: {
+      uint use_transform, decal_forward_offset, decal_inside_offset;
+      svm_unpack_node_uchar3(node.w, &use_transform, &decal_forward_offset, &decal_inside_offset);
       data = sd->P + sd->dP.dy;
       if (sd->object != OBJECT_NONE && kernel_tex_fetch(__objects, sd->object).use_ocs_frame>0)  {
         Transform tfm = kernel_tex_fetch(__objects, sd->object).ocs_frame;
         data = transform_point(&tfm, data);
       }
-      if (node.w == 0) {
+      if (use_transform == 0) {
         if (sd->object != OBJECT_NONE) {
           object_inverse_position_transform(kg, sd, &data);
         }
       }
       else {
-        Transform tfm;
+        Transform tfm, itfm;
+        float3 n = sd->N;
+        float3 orig = make_float3(0.0f, 0.0f, 0.0f);
+        float3 upz = make_float3(0.0f, 0.0f, 1.0f);
         tfm.x = read_node_float(kg, offset);
         tfm.y = read_node_float(kg, offset);
         tfm.z = read_node_float(kg, offset);
+        itfm.x = read_node_float(kg, offset);
+        itfm.y = read_node_float(kg, offset);
+        itfm.z = read_node_float(kg, offset);
+
+        orig = transform_point(&tfm, orig);
+        upz = transform_direction(&itfm, upz);
+        float dotp = dot(upz, n);
+        float inside = dot(n, data - orig);
+
+        stack_store_float(stack, decal_forward_offset, dotp > 0.0f ? 1.0f : -1.0f);
+        stack_store_float(stack, decal_inside_offset, inside < 0.0f ? 1.0f : 0.0f);
+
         data = transform_point(&tfm, data);
-        //data = transform_direction(&tfm, data);
       }
       break;
     }
